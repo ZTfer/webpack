@@ -5,6 +5,18 @@ module.exports = (env, { testPath }) => [
 	{
 		resolve: {
 			alias: {
+				library: path.resolve(testPath, "../0-create-library/esm.js")
+			}
+		},
+		plugins: [
+			new webpack.DefinePlugin({
+				NAME: JSON.stringify("esm")
+			})
+		]
+	},
+	{
+		resolve: {
+			alias: {
 				library: path.resolve(testPath, "../0-create-library/commonjs.js")
 			}
 		},
@@ -47,6 +59,40 @@ module.exports = (env, { testPath }) => [
 		plugins: [
 			new webpack.DefinePlugin({
 				NAME: JSON.stringify("amd-iife")
+			})
+		]
+	},
+	{
+		externals: {
+			library: `promise (require(${JSON.stringify(
+				"../0-create-library/amd-runtimeChunk/runtime.js"
+			)}), require(${JSON.stringify(
+				"../0-create-library/amd-runtimeChunk/main.js"
+			)}))`
+		},
+		output: {
+			library: { type: "commonjs-module" }
+		},
+		plugins: [
+			new webpack.DefinePlugin({
+				NAME: JSON.stringify("amd-runtimeChunk")
+			})
+		]
+	},
+	{
+		externals: {
+			library: `promise (require(${JSON.stringify(
+				"../0-create-library/amd-iife-runtimeChunk/runtime.js"
+			)}), require(${JSON.stringify(
+				"../0-create-library/amd-iife-runtimeChunk/main.js"
+			)}))`
+		},
+		output: {
+			library: { type: "commonjs-module" }
+		},
+		plugins: [
+			new webpack.DefinePlugin({
+				NAME: JSON.stringify("amd-iife-runtimeChunk")
 			})
 		]
 	},

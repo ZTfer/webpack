@@ -52,8 +52,10 @@ import {
 	NewExpression,
 	ObjectExpression,
 	ObjectPattern,
+	PrivateIdentifier,
 	Program,
 	Property,
+	PropertyDefinition,
 	RegExpLiteral,
 	RestElement,
 	ReturnStatement,
@@ -78,12 +80,8 @@ import {
 	WithStatement,
 	YieldExpression
 } from "estree";
-import { JSONSchema4, JSONSchema6, JSONSchema7 } from "json-schema";
-import { default as ValidationError } from "schema-utils/declarations/ValidationError";
-import {
-	Extend,
-	ValidationErrorConfiguration
-} from "schema-utils/declarations/validate";
+import { ValidationError, validate as validateFunction } from "schema-utils";
+import { ValidationErrorConfiguration } from "schema-utils/declarations/validate";
 import {
 	AsArray,
 	AsyncParallelHook,
@@ -121,11 +119,11 @@ declare class AbstractLibraryPlugin<T> {
 	): void;
 	embedInRuntimeBailout(
 		module: Module,
-		renderContext: RenderContextObject,
+		renderContext: RenderContext,
 		libraryContext: LibraryContext<T>
 	): undefined | string;
 	strictRuntimeBailout(
-		renderContext: RenderContextObject,
+		renderContext: RenderContext,
 		libraryContext: LibraryContext<T>
 	): undefined | string;
 	runtimeRequirements(
@@ -135,7 +133,7 @@ declare class AbstractLibraryPlugin<T> {
 	): void;
 	render(
 		source: Source,
-		renderContext: RenderContextObject,
+		renderContext: RenderContext,
 		libraryContext: LibraryContext<T>
 	): Source;
 	renderStartup(
@@ -151,6 +149,10 @@ declare class AbstractLibraryPlugin<T> {
 		libraryContext: LibraryContext<T>
 	): void;
 	static COMMON_LIBRARY_NAME_MESSAGE: string;
+}
+declare interface AdditionalData {
+	[index: string]: any;
+	webpackAST: object;
 }
 declare class AggressiveMergingPlugin {
 	constructor(options?: any);
@@ -357,6 +359,7 @@ declare abstract class AsyncQueue<T, K, R> {
 	isProcessing(item: T): boolean;
 	isQueued(item: T): boolean;
 	isDone(item: T): boolean;
+	clear(): void;
 }
 declare class AsyncWebAssemblyModulesPlugin {
 	constructor(options?: any);
@@ -887,10 +890,15 @@ declare class ChunkGraph {
 	): ReadonlySet<string>;
 	getChunkRuntimeRequirements(chunk: Chunk): ReadonlySet<string>;
 	getModuleGraphHash(
-		module?: any,
-		runtime?: any,
+		module: Module,
+		runtime: RuntimeSpec,
 		withConnections?: boolean
-	): any;
+	): string;
+	getModuleGraphHashBigInt(
+		module: Module,
+		runtime: RuntimeSpec,
+		withConnections?: boolean
+	): bigint;
 	getTreeRuntimeRequirements(chunk: Chunk): ReadonlySet<string>;
 	static getChunkGraphForModule(
 		module: Module,
@@ -1054,6 +1062,42 @@ declare interface ChunkPathData {
 declare class ChunkPrefetchPreloadPlugin {
 	constructor();
 	apply(compiler: Compiler): void;
+}
+declare interface ChunkRenderContext {
+	/**
+	 * the chunk
+	 */
+	chunk: Chunk;
+
+	/**
+	 * the dependency templates
+	 */
+	dependencyTemplates: DependencyTemplates;
+
+	/**
+	 * the runtime template
+	 */
+	runtimeTemplate: RuntimeTemplate;
+
+	/**
+	 * the module graph
+	 */
+	moduleGraph: ModuleGraph;
+
+	/**
+	 * the chunk graph
+	 */
+	chunkGraph: ChunkGraph;
+
+	/**
+	 * results of code generation
+	 */
+	codeGenerationResults: CodeGenerationResults;
+
+	/**
+	 * init fragments for the chunk
+	 */
+	chunkInitFragments: InitFragment<ChunkRenderContext>[];
 }
 declare interface ChunkSizeOptions {
 	/**
@@ -1644,8 +1688,8 @@ declare class Compilation {
 	 */
 	createChildCompiler(
 		name: string,
-		outputOptions: OutputNormalized,
-		plugins: (
+		outputOptions?: OutputNormalized,
+		plugins?: (
 			| ((this: Compiler, compiler: Compiler) => void)
 			| WebpackPluginInstance
 		)[]
@@ -1742,27 +1786,28 @@ declare interface CompilationAssets {
 	[index: string]: Source;
 }
 declare interface CompilationHooksAsyncWebAssemblyModulesPlugin {
-	renderModuleContent: SyncWaterfallHook<[Source, Module, RenderContextObject]>;
+	renderModuleContent: SyncWaterfallHook<[Source, Module, RenderContext]>;
 }
 declare interface CompilationHooksJavascriptModulesPlugin {
-	renderModuleContent: SyncWaterfallHook<[Source, Module, RenderContextObject]>;
+	renderModuleContent: SyncWaterfallHook<[Source, Module, ChunkRenderContext]>;
 	renderModuleContainer: SyncWaterfallHook<
-		[Source, Module, RenderContextObject]
+		[Source, Module, ChunkRenderContext]
 	>;
-	renderModulePackage: SyncWaterfallHook<[Source, Module, RenderContextObject]>;
-	renderChunk: SyncWaterfallHook<[Source, RenderContextObject]>;
-	renderMain: SyncWaterfallHook<[Source, RenderContextObject]>;
-	render: SyncWaterfallHook<[Source, RenderContextObject]>;
+	renderModulePackage: SyncWaterfallHook<[Source, Module, ChunkRenderContext]>;
+	renderChunk: SyncWaterfallHook<[Source, RenderContext]>;
+	renderMain: SyncWaterfallHook<[Source, RenderContext]>;
+	renderContent: SyncWaterfallHook<[Source, RenderContext]>;
+	render: SyncWaterfallHook<[Source, RenderContext]>;
 	renderStartup: SyncWaterfallHook<[Source, Module, StartupRenderContext]>;
 	renderRequire: SyncWaterfallHook<[string, RenderBootstrapContext]>;
 	inlineInRuntimeBailout: SyncBailHook<
 		[Module, RenderBootstrapContext],
 		string
 	>;
-	embedInRuntimeBailout: SyncBailHook<[Module, RenderContextObject], string>;
-	strictRuntimeBailout: SyncBailHook<[RenderContextObject], string>;
+	embedInRuntimeBailout: SyncBailHook<[Module, RenderContext], string>;
+	strictRuntimeBailout: SyncBailHook<[RenderContext], string>;
 	chunkHash: SyncHook<[Chunk, Hash, ChunkHashContext]>;
-	useSourceMap: SyncBailHook<[Chunk, RenderContextObject], boolean>;
+	useSourceMap: SyncBailHook<[Chunk, RenderContext], boolean>;
 }
 declare interface CompilationHooksRealContentHashPlugin {
 	updateHash: SyncBailHook<[Buffer[], string], string>;
@@ -1824,6 +1869,7 @@ declare class Compiler {
 	removedFiles: Set<string>;
 	fileTimestamps: Map<string, null | FileSystemInfoEntry | "ignore">;
 	contextTimestamps: Map<string, null | FileSystemInfoEntry | "ignore">;
+	fsStartTime: number;
 	resolverFactory: ResolverFactory;
 	infrastructureLogger: any;
 	options: WebpackOptionsNormalized;
@@ -1849,8 +1895,8 @@ declare class Compiler {
 		compilation: Compilation,
 		compilerName: string,
 		compilerIndex: number,
-		outputOptions: OutputNormalized,
-		plugins: WebpackPluginInstance[]
+		outputOptions?: OutputNormalized,
+		plugins?: WebpackPluginInstance[]
 	): Compiler;
 	isChild(): boolean;
 	createCompilation(): Compilation;
@@ -2368,6 +2414,7 @@ declare interface ContextModuleOptions {
 	include?: RegExp;
 	exclude?: RegExp;
 	groupOptions?: RawChunkGroupOptions;
+	typePrefix?: string;
 	category?: string;
 
 	/**
@@ -2457,9 +2504,9 @@ declare class Dependency {
 	constructor();
 	weak: boolean;
 	optional: boolean;
-	loc: DependencyLocation;
 	readonly type: string;
 	readonly category: string;
+	loc: DependencyLocation;
 	getResourceIdentifier(): null | string;
 
 	/**
@@ -2567,7 +2614,7 @@ declare interface DependencyTemplateContext {
 	/**
 	 * mutable array of init fragments for the current module
 	 */
-	initFragments: InitFragment[];
+	initFragments: InitFragment<GenerateContext>[];
 
 	/**
 	 * when in a concatenated module, information about other concatenated modules
@@ -3029,7 +3076,7 @@ declare class EntryPlugin {
 	 * An entry plugin which will handle
 	 * creation of the EntryDependency
 	 */
-	constructor(context: string, entry: string, options: string | EntryOptions);
+	constructor(context: string, entry: string, options?: string | EntryOptions);
 	context: string;
 	entry: string;
 	options: string | EntryOptions;
@@ -3354,17 +3401,7 @@ declare abstract class ExportInfo {
 		| "maybe provided (runtime-defined)"
 		| "provided"
 		| "not provided";
-	getRenameInfo():
-		| string
-		| "missing provision and use info prevents renaming"
-		| "usage prevents renaming (no provision info)"
-		| "missing provision info prevents renaming"
-		| "missing usage info prevents renaming"
-		| "usage prevents renaming"
-		| "could be renamed"
-		| "provision prevents renaming (no use info)"
-		| "usage and provision prevents renaming"
-		| "provision prevents renaming";
+	getRenameInfo(): string;
 }
 declare interface ExportSpec {
 	/**
@@ -3581,6 +3618,11 @@ declare interface ExternalItemFunctionData {
 	contextInfo?: ModuleFactoryCreateDataContextInfo;
 
 	/**
+	 * The category of the referencing dependencies.
+	 */
+	dependencyType?: string;
+
+	/**
 	 * Get a resolve function with the current resolver options.
 	 */
 	getResolve?: (
@@ -3623,11 +3665,6 @@ declare class ExternalModule extends Module {
 	request: string | string[] | Record<string, string | string[]>;
 	externalType: string;
 	userRequest: string;
-	getSourceData(
-		runtimeTemplate?: any,
-		moduleGraph?: any,
-		chunkGraph?: any
-	): SourceData;
 }
 declare interface ExternalModuleInfo {
 	index: number;
@@ -3818,6 +3855,11 @@ declare interface FileCacheOptions {
 	 * Name for the cache. Different names will lead to different coexisting caches.
 	 */
 	name?: string;
+
+	/**
+	 * Track and log detailed timing information for individual cache items.
+	 */
+	profile?: boolean;
 
 	/**
 	 * When to store data to the filesystem. (pack: Store data when compiler is idle in a single file).
@@ -4183,7 +4225,7 @@ declare interface HashedModuleIdsPluginOptions {
 	/**
 	 * The encoding to use when generating the hash, defaults to 'base64'. All encodings from Node.JS' hash.digest are supported.
 	 */
-	hashDigest?: "hex" | "latin1" | "base64";
+	hashDigest?: "base64" | "latin1" | "hex";
 
 	/**
 	 * The prefix length of the hash digest to use, defaults to 4.
@@ -4205,6 +4247,13 @@ declare class HotModuleReplacementPlugin {
 	 */
 	apply(compiler: Compiler): void;
 	static getParserHooks(parser: JavascriptParser): HMRJavascriptParserHooks;
+}
+
+/**
+ * These properties are added by the HotModuleReplacementPlugin
+ */
+declare interface HotModuleReplacementPluginLoaderContext {
+	hot?: boolean;
 }
 declare class HotUpdateChunk extends Chunk {
 	constructor();
@@ -4294,6 +4343,17 @@ type IgnorePluginOptions =
 			 */
 			checkResource?: (resource: string, context: string) => boolean;
 	  };
+declare interface ImportModuleOptions {
+	/**
+	 * the target layer
+	 */
+	layer?: string;
+
+	/**
+	 * the target public path
+	 */
+	publicPath?: string;
+}
 type ImportSource =
 	| undefined
 	| null
@@ -4341,43 +4401,43 @@ declare interface InfrastructureLogging {
 	 */
 	stream?: NodeJS.WritableStream;
 }
-declare abstract class InitFragment {
+declare abstract class InitFragment<Context> {
 	content: string | Source;
 	stage: number;
 	position: number;
 	key?: string;
 	endContent?: string | Source;
-	getContent(generateContext: GenerateContext): string | Source;
-	getEndContent(generateContext: GenerateContext): undefined | string | Source;
+	getContent(context: Context): string | Source;
+	getEndContent(context: Context): undefined | string | Source;
 	merge: any;
 }
 declare interface InputFileSystem {
 	readFile: (
 		arg0: string,
-		arg1: (arg0?: NodeJS.ErrnoException, arg1?: string | Buffer) => void
+		arg1: (arg0?: null | NodeJS.ErrnoException, arg1?: string | Buffer) => void
 	) => void;
 	readJson?: (
 		arg0: string,
-		arg1: (arg0?: Error | NodeJS.ErrnoException, arg1?: any) => void
+		arg1: (arg0?: null | Error | NodeJS.ErrnoException, arg1?: any) => void
 	) => void;
 	readlink: (
 		arg0: string,
-		arg1: (arg0?: NodeJS.ErrnoException, arg1?: string | Buffer) => void
+		arg1: (arg0?: null | NodeJS.ErrnoException, arg1?: string | Buffer) => void
 	) => void;
 	readdir: (
 		arg0: string,
 		arg1: (
-			arg0?: NodeJS.ErrnoException,
+			arg0?: null | NodeJS.ErrnoException,
 			arg1?: (string | Buffer)[] | IDirent[]
 		) => void
 	) => void;
 	stat: (
 		arg0: string,
-		arg1: (arg0?: NodeJS.ErrnoException, arg1?: IStats) => void
+		arg1: (arg0?: null | NodeJS.ErrnoException, arg1?: IStats) => void
 	) => void;
 	realpath?: (
 		arg0: string,
-		arg1: (arg0?: NodeJS.ErrnoException, arg1?: string | Buffer) => void
+		arg1: (arg0?: null | NodeJS.ErrnoException, arg1?: string | Buffer) => void
 	) => void;
 	purge?: (arg0?: string) => void;
 	join?: (arg0: string, arg1: string) => string;
@@ -4393,7 +4453,7 @@ declare interface IntermediateFileSystemExtras {
 	open: (
 		arg0: string,
 		arg1: string,
-		arg2: (arg0?: NodeJS.ErrnoException, arg1?: number) => void
+		arg2: (arg0?: null | NodeJS.ErrnoException, arg1?: number) => void
 	) => void;
 	read: (
 		arg0: number,
@@ -4401,13 +4461,16 @@ declare interface IntermediateFileSystemExtras {
 		arg2: number,
 		arg3: number,
 		arg4: number,
-		arg5: (arg0?: NodeJS.ErrnoException, arg1?: number) => void
+		arg5: (arg0?: null | NodeJS.ErrnoException, arg1?: number) => void
 	) => void;
-	close: (arg0: number, arg1: (arg0?: NodeJS.ErrnoException) => void) => void;
+	close: (
+		arg0: number,
+		arg1: (arg0?: null | NodeJS.ErrnoException) => void
+	) => void;
 	rename: (
 		arg0: string,
 		arg1: string,
-		arg2: (arg0?: NodeJS.ErrnoException) => void
+		arg2: (arg0?: null | NodeJS.ErrnoException) => void
 	) => void;
 }
 type InternalCell<T> = T | typeof TOMBSTONE | typeof UNDEFINED_MARKER;
@@ -4432,12 +4495,12 @@ declare class JavascriptModulesPlugin {
 	apply(compiler: Compiler): void;
 	renderModule(
 		module: Module,
-		renderContext: RenderContextObject,
+		renderContext: ChunkRenderContext,
 		hooks: CompilationHooksJavascriptModulesPlugin,
 		factory: boolean | "strict"
 	): Source;
 	renderChunk(
-		renderContext: RenderContextObject,
+		renderContext: RenderContext,
 		hooks: CompilationHooksJavascriptModulesPlugin
 	): Source;
 	renderMain(
@@ -4534,6 +4597,7 @@ declare class JavascriptParser extends Parser {
 						| FunctionDeclaration
 						| VariableDeclaration
 						| ClassDeclaration
+						| PrivateIdentifier
 					),
 					number
 				],
@@ -4636,7 +4700,18 @@ declare class JavascriptParser extends Parser {
 			boolean | void
 		>;
 		classBodyElement: SyncBailHook<
-			[MethodDefinition, ClassExpression | ClassDeclaration],
+			[
+				MethodDefinition | PropertyDefinition,
+				ClassExpression | ClassDeclaration
+			],
+			boolean | void
+		>;
+		classBodyValue: SyncBailHook<
+			[
+				Expression,
+				MethodDefinition | PropertyDefinition,
+				ClassExpression | ClassDeclaration
+			],
 			boolean | void
 		>;
 		label: HookMap<SyncBailHook<[LabeledStatement], boolean | void>>;
@@ -4765,7 +4840,6 @@ declare class JavascriptParser extends Parser {
 	currentTagData: any;
 	getRenameIdentifier(expr?: any): undefined | string;
 	walkClass(classy: ClassExpression | ClassDeclaration): void;
-	walkMethodDefinition(methodDefinition?: any): void;
 	preWalkStatements(statements?: any): void;
 	blockPreWalkStatements(statements?: any): void;
 	walkStatements(statements?: any): void;
@@ -4950,7 +5024,8 @@ declare class JavascriptParser extends Parser {
 			| ChainExpression
 			| FunctionDeclaration
 			| VariableDeclaration
-			| ClassDeclaration,
+			| ClassDeclaration
+			| PrivateIdentifier,
 		commentsStartPos: number
 	): boolean;
 	getComments(range?: any): any[];
@@ -4967,9 +5042,7 @@ declare class JavascriptParser extends Parser {
 	parseCommentOptions(
 		range?: any
 	): { options: null; errors: null } | { options: object; errors: any[] };
-	extractMemberExpressionChain(
-		expression: MemberExpression
-	): {
+	extractMemberExpressionChain(expression: MemberExpression): {
 		members: string[];
 		object:
 			| UnaryExpression
@@ -5001,16 +5074,15 @@ declare class JavascriptParser extends Parser {
 			| ChainExpression
 			| Super;
 	};
-	getFreeInfoFromVariable(
-		varName: string
-	): { name: string; info: string | VariableInfo };
+	getFreeInfoFromVariable(varName: string): {
+		name: string;
+		info: string | VariableInfo;
+	};
 	getMemberExpressionInfo(
 		expression: MemberExpression,
 		allowedTypes: number
 	): undefined | CallExpressionInfo | ExpressionExpressionInfo;
-	getNameForExpression(
-		expression: MemberExpression
-	): {
+	getNameForExpression(expression: MemberExpression): {
 		name: string;
 		rootInfo: ExportedVariableInfo;
 		getMembers: () => string[];
@@ -5725,7 +5797,7 @@ declare interface LoadScriptCompilationHooks {
 	createScript: SyncWaterfallHook<[string, Chunk]>;
 }
 declare class LoadScriptRuntimeModule extends HelperRuntimeModule {
-	constructor();
+	constructor(withCreateScriptUrl?: boolean);
 	static getCompilationHooks(
 		compilation: Compilation
 	): LoadScriptCompilationHooks;
@@ -5757,11 +5829,44 @@ declare class LoadScriptRuntimeModule extends HelperRuntimeModule {
 declare interface Loader {
 	[index: string]: any;
 }
+type LoaderContext<OptionsType> = NormalModuleLoaderContext<OptionsType> &
+	LoaderRunnerLoaderContext<OptionsType> &
+	LoaderPluginLoaderContext &
+	HotModuleReplacementPluginLoaderContext;
+type LoaderDefinition<
+	OptionsType = {},
+	ContextAdditions = {}
+> = LoaderDefinitionFunction<OptionsType, ContextAdditions> & {
+	raw?: false;
+	pitch?: PitchLoaderDefinitionFunction<OptionsType, ContextAdditions>;
+};
+declare interface LoaderDefinitionFunction<
+	OptionsType = {},
+	ContextAdditions = {}
+> {
+	(
+		this: NormalModuleLoaderContext<OptionsType> &
+			LoaderRunnerLoaderContext<OptionsType> &
+			LoaderPluginLoaderContext &
+			HotModuleReplacementPluginLoaderContext &
+			ContextAdditions,
+		content: string,
+		sourceMap?: string | SourceMap,
+		additionalData?: AdditionalData
+	): string | void | Buffer | Promise<string | Buffer>;
+}
 declare interface LoaderItem {
 	loader: string;
 	options: any;
 	ident: null | string;
 	type: null | string;
+}
+declare interface LoaderModule<OptionsType = {}, ContextAdditions = {}> {
+	default?:
+		| RawLoaderDefinitionFunction<OptionsType, ContextAdditions>
+		| LoaderDefinitionFunction<OptionsType, ContextAdditions>;
+	raw?: false;
+	pitch?: PitchLoaderDefinitionFunction<OptionsType, ContextAdditions>;
 }
 declare class LoaderOptionsPlugin {
 	constructor(options?: LoaderOptionsPluginOptions);
@@ -5795,6 +5900,165 @@ declare interface LoaderOptionsPluginOptions {
 		 */
 		context?: string;
 	};
+}
+
+/**
+ * These properties are added by the LoaderPlugin
+ */
+declare interface LoaderPluginLoaderContext {
+	/**
+	 * Resolves the given request to a module, applies all configured loaders and calls
+	 * back with the generated source, the sourceMap and the module instance (usually an
+	 * instance of NormalModule). Use this function if you need to know the source code
+	 * of another module to generate the result.
+	 */
+	loadModule(
+		request: string,
+		callback: (
+			err: null | Error,
+			source: string,
+			sourceMap: any,
+			module: NormalModule
+		) => void
+	): void;
+	importModule(
+		request: string,
+		options: ImportModuleOptions,
+		callback: (err?: Error, exports?: any) => any
+	): void;
+	importModule(request: string, options?: ImportModuleOptions): Promise<any>;
+}
+
+/**
+ * The properties are added by https://github.com/webpack/loader-runner
+ */
+declare interface LoaderRunnerLoaderContext<OptionsType> {
+	/**
+	 * Add a directory as dependency of the loader result.
+	 */
+	addContextDependency(context: string): void;
+
+	/**
+	 * Adds a file as dependency of the loader result in order to make them watchable.
+	 * For example, html-loader uses this technique as it finds src and src-set attributes.
+	 * Then, it sets the url's for those attributes as dependencies of the html file that is parsed.
+	 */
+	addDependency(file: string): void;
+	addMissingDependency(context: string): void;
+
+	/**
+	 * Make this loader async.
+	 */
+	async(): (
+		err?: null | Error,
+		content?: string | Buffer,
+		sourceMap?: string | SourceMap,
+		additionalData?: AdditionalData
+	) => void;
+
+	/**
+	 * Make this loader result cacheable. By default it's cacheable.
+	 * A cacheable loader must have a deterministic result, when inputs and dependencies haven't changed.
+	 * This means the loader shouldn't have other dependencies than specified with this.addDependency.
+	 * Most loaders are deterministic and cacheable.
+	 */
+	cacheable(flag?: boolean): void;
+	callback: (
+		err?: null | Error,
+		content?: string | Buffer,
+		sourceMap?: string | SourceMap,
+		additionalData?: AdditionalData
+	) => void;
+
+	/**
+	 * Remove all dependencies of the loader result. Even initial dependencies and these of other loaders.
+	 */
+	clearDependencies(): void;
+
+	/**
+	 * The directory of the module. Can be used as context for resolving other stuff.
+	 * eg '/workspaces/ts-loader/examples/vanilla/src'
+	 */
+	context: string;
+	readonly currentRequest: string;
+	readonly data: any;
+
+	/**
+	 * alias of addDependency
+	 * Adds a file as dependency of the loader result in order to make them watchable.
+	 * For example, html-loader uses this technique as it finds src and src-set attributes.
+	 * Then, it sets the url's for those attributes as dependencies of the html file that is parsed.
+	 */
+	dependency(file: string): void;
+	getContextDependencies(): string[];
+	getDependencies(): string[];
+	getMissingDependencies(): string[];
+
+	/**
+	 * The index in the loaders array of the current loader.
+	 * In the example: in loader1: 0, in loader2: 1
+	 */
+	loaderIndex: number;
+	readonly previousRequest: string;
+	readonly query: string | OptionsType;
+	readonly remainingRequest: string;
+	readonly request: string;
+
+	/**
+	 * An array of all the loaders. It is writeable in the pitch phase.
+	 * loaders = [{request: string, path: string, query: string, module: function}]
+	 * In the example:
+	 * [
+	 *   { request: "/abc/loader1.js?xyz",
+	 *     path: "/abc/loader1.js",
+	 *     query: "?xyz",
+	 *     module: [Function]
+	 *   },
+	 *   { request: "/abc/node_modules/loader2/index.js",
+	 *     path: "/abc/node_modules/loader2/index.js",
+	 *     query: "",
+	 *     module: [Function]
+	 *   }
+	 * ]
+	 */
+	loaders: {
+		request: string;
+		path: string;
+		query: string;
+		fragment: string;
+		options?: string | object;
+		ident: string;
+		normal?: Function;
+		pitch?: Function;
+		raw?: boolean;
+		data?: object;
+		pitchExecuted: boolean;
+		normalExecuted: boolean;
+	}[];
+
+	/**
+	 * The resource path.
+	 * In the example: "/abc/resource.js"
+	 */
+	resourcePath: string;
+
+	/**
+	 * The resource query string.
+	 * Example: "?query"
+	 */
+	resourceQuery: string;
+
+	/**
+	 * The resource fragment.
+	 * Example: "#frag"
+	 */
+	resourceFragment: string;
+
+	/**
+	 * The resource inclusive query and fragment.
+	 * Example: "/abc/resource.js?query#frag"
+	 */
+	resource: string;
 }
 declare class LoaderTargetPlugin {
 	constructor(target: string);
@@ -6696,6 +6960,7 @@ type NodeEstreeIndex =
 	| FunctionDeclaration
 	| VariableDeclaration
 	| ClassDeclaration
+	| PrivateIdentifier
 	| ExpressionStatement
 	| BlockStatement
 	| EmptyStatement
@@ -6719,6 +6984,7 @@ type NodeEstreeIndex =
 	| ExportDefaultDeclaration
 	| ExportAllDeclaration
 	| MethodDefinition
+	| PropertyDefinition
 	| VariableDeclarator
 	| Program
 	| Super
@@ -6813,6 +7079,10 @@ declare class NormalModule extends Module {
 		 */
 		resource: string;
 		/**
+		 * resource resolve data
+		 */
+		resourceResolveData?: Record<string, any>;
+		/**
 		 * path + query of the matched resource (virtual)
 		 */
 		matchResource?: string;
@@ -6846,6 +7116,7 @@ declare class NormalModule extends Module {
 	generator: Generator;
 	generatorOptions: object;
 	resource: string;
+	resourceResolveData?: Record<string, any>;
 	matchResource?: string;
 	loaders: LoaderItem[];
 	error?: WebpackError;
@@ -6865,7 +7136,7 @@ declare class NormalModule extends Module {
 		options: WebpackOptionsNormalized,
 		compilation: Compilation,
 		fs: InputFileSystem
-	): any;
+	): NormalModuleLoaderContext<any>;
 	getCurrentLoader(loaderContext?: any, index?: any): null | LoaderItem;
 	createSource(
 		context: string,
@@ -6940,6 +7211,58 @@ declare abstract class NormalModuleFactory extends ModuleFactory {
 	getGenerator(type?: any, generatorOptions?: object): undefined | Generator;
 	createGenerator(type?: any, generatorOptions?: object): any;
 	getResolver(type?: any, resolveOptions?: any): ResolverWithOptions;
+}
+
+/**
+ * These properties are added by the NormalModule
+ */
+declare interface NormalModuleLoaderContext<OptionsType> {
+	version: number;
+	getOptions(): OptionsType;
+	getOptions(schema: Parameters<typeof validateFunction>[0]): OptionsType;
+	emitWarning(warning: Error): void;
+	emitError(error: Error): void;
+	getLogger(name?: string): WebpackLogger;
+	resolve(
+		context: string,
+		request: string,
+		callback: (
+			arg0: null | Error,
+			arg1?: string | false,
+			arg2?: ResolveRequest
+		) => void
+	): any;
+	getResolve(options?: ResolveOptionsWithDependencyType): {
+		(
+			context: string,
+			request: string,
+			callback: (
+				arg0: null | Error,
+				arg1?: string | false,
+				arg2?: ResolveRequest
+			) => void
+		): void;
+		(context: string, request: string): Promise<string>;
+	};
+	emitFile(
+		name: string,
+		content: string | Buffer,
+		sourceMap?: string,
+		assetInfo?: AssetInfo
+	): void;
+	addBuildDependency(dep: string): void;
+	utils: {
+		absolutify: (context: string, request: string) => string;
+		contextify: (context: string, request: string) => string;
+	};
+	rootContext: string;
+	fs: InputFileSystem;
+	sourceMap?: boolean;
+	mode: "development" | "production" | "none";
+	webpack?: boolean;
+	_module?: NormalModule;
+	_compilation?: Compilation;
+	_compiler?: Compiler;
 }
 declare class NormalModuleReplacementPlugin {
 	/**
@@ -7653,6 +7976,11 @@ declare interface Output {
 	strictModuleExceptionHandling?: boolean;
 
 	/**
+	 * Use a Trusted Types policy to create urls for chunks. 'output.uniqueName' is used a default policy name. Passing a string sets a custom policy name.
+	 */
+	trustedTypes?: string | true | TrustedTypes;
+
+	/**
 	 * If `output.libraryTarget` is set to umd and `output.library` is set, setting this to true will name the AMD module.
 	 */
 	umdNamedDefine?: boolean;
@@ -7686,25 +8014,34 @@ declare interface OutputFileSystem {
 	writeFile: (
 		arg0: string,
 		arg1: string | Buffer,
-		arg2: (arg0?: NodeJS.ErrnoException) => void
+		arg2: (arg0?: null | NodeJS.ErrnoException) => void
 	) => void;
-	mkdir: (arg0: string, arg1: (arg0?: NodeJS.ErrnoException) => void) => void;
+	mkdir: (
+		arg0: string,
+		arg1: (arg0?: null | NodeJS.ErrnoException) => void
+	) => void;
 	readdir?: (
 		arg0: string,
 		arg1: (
-			arg0?: NodeJS.ErrnoException,
+			arg0?: null | NodeJS.ErrnoException,
 			arg1?: (string | Buffer)[] | IDirent[]
 		) => void
 	) => void;
-	rmdir?: (arg0: string, arg1: (arg0?: NodeJS.ErrnoException) => void) => void;
-	unlink?: (arg0: string, arg1: (arg0?: NodeJS.ErrnoException) => void) => void;
+	rmdir?: (
+		arg0: string,
+		arg1: (arg0?: null | NodeJS.ErrnoException) => void
+	) => void;
+	unlink?: (
+		arg0: string,
+		arg1: (arg0?: null | NodeJS.ErrnoException) => void
+	) => void;
 	stat: (
 		arg0: string,
-		arg1: (arg0?: NodeJS.ErrnoException, arg1?: IStats) => void
+		arg1: (arg0?: null | NodeJS.ErrnoException, arg1?: IStats) => void
 	) => void;
 	readFile: (
 		arg0: string,
-		arg1: (arg0?: NodeJS.ErrnoException, arg1?: string | Buffer) => void
+		arg1: (arg0?: null | NodeJS.ErrnoException, arg1?: string | Buffer) => void
 	) => void;
 	join?: (arg0: string, arg1: string) => string;
 	relative?: (arg0: string, arg1: string) => string;
@@ -7915,6 +8252,11 @@ declare interface OutputNormalized {
 	strictModuleExceptionHandling?: boolean;
 
 	/**
+	 * Use a Trusted Types policy to create urls for chunks.
+	 */
+	trustedTypes?: TrustedTypes;
+
+	/**
 	 * A unique name of the webpack build to avoid multiple webpack runtimes to conflict when using globals.
 	 */
 	uniqueName?: string;
@@ -8059,6 +8401,21 @@ declare interface PerformanceOptions {
 	 * Total size of an entry point (in bytes).
 	 */
 	maxEntrypointSize?: number;
+}
+declare interface PitchLoaderDefinitionFunction<
+	OptionsType = {},
+	ContextAdditions = {}
+> {
+	(
+		this: NormalModuleLoaderContext<OptionsType> &
+			LoaderRunnerLoaderContext<OptionsType> &
+			LoaderPluginLoaderContext &
+			HotModuleReplacementPluginLoaderContext &
+			ContextAdditions,
+		remainingRequest: string,
+		previousRequest: string,
+		data: object
+	): string | void | Buffer | Promise<string | Buffer>;
 }
 type Plugin =
 	| { apply: (arg0: Resolver) => void }
@@ -8276,6 +8633,28 @@ declare interface RawChunkGroupOptions {
 	preloadOrder?: number;
 	prefetchOrder?: number;
 }
+type RawLoaderDefinition<
+	OptionsType = {},
+	ContextAdditions = {}
+> = RawLoaderDefinitionFunction<OptionsType, ContextAdditions> & {
+	raw: true;
+	pitch?: PitchLoaderDefinitionFunction<OptionsType, ContextAdditions>;
+};
+declare interface RawLoaderDefinitionFunction<
+	OptionsType = {},
+	ContextAdditions = {}
+> {
+	(
+		this: NormalModuleLoaderContext<OptionsType> &
+			LoaderRunnerLoaderContext<OptionsType> &
+			LoaderPluginLoaderContext &
+			HotModuleReplacementPluginLoaderContext &
+			ContextAdditions,
+		content: Buffer,
+		sourceMap?: string | SourceMap,
+		additionalData?: AdditionalData
+	): string | void | Buffer | Promise<string | Buffer>;
+}
 declare class RawSource extends Source {
 	constructor(source: string | Buffer, convertToString?: boolean);
 	isBuffer(): boolean;
@@ -8369,33 +8748,7 @@ declare interface RenderBootstrapContext {
 	 */
 	hash: string;
 }
-declare interface RenderContextModuleTemplate {
-	/**
-	 * the chunk
-	 */
-	chunk: Chunk;
-
-	/**
-	 * the dependency templates
-	 */
-	dependencyTemplates: DependencyTemplates;
-
-	/**
-	 * the runtime template
-	 */
-	runtimeTemplate: RuntimeTemplate;
-
-	/**
-	 * the module graph
-	 */
-	moduleGraph: ModuleGraph;
-
-	/**
-	 * the chunk graph
-	 */
-	chunkGraph: ChunkGraph;
-}
-declare interface RenderContextObject {
+declare interface RenderContext {
 	/**
 	 * the chunk
 	 */
@@ -8891,60 +9244,71 @@ declare interface RuleSet {
 type RuleSetCondition =
 	| string
 	| RegExp
-	| {
-			/**
-			 * Logical AND.
-			 */
-			and?: RuleSetCondition[];
-			/**
-			 * Logical NOT.
-			 */
-			not?: RuleSetCondition[];
-			/**
-			 * Logical OR.
-			 */
-			or?: RuleSetCondition[];
-	  }
 	| ((value: string) => boolean)
+	| RuleSetLogicalConditions
 	| RuleSetCondition[];
 type RuleSetConditionAbsolute =
 	| string
 	| RegExp
-	| {
-			/**
-			 * Logical AND.
-			 */
-			and?: RuleSetConditionAbsolute[];
-			/**
-			 * Logical NOT.
-			 */
-			not?: RuleSetConditionAbsolute[];
-			/**
-			 * Logical OR.
-			 */
-			or?: RuleSetConditionAbsolute[];
-	  }
 	| ((value: string) => boolean)
+	| RuleSetLogicalConditionsAbsolute
 	| RuleSetConditionAbsolute[];
 type RuleSetConditionOrConditions =
 	| string
 	| RegExp
-	| {
-			/**
-			 * Logical AND.
-			 */
-			and?: RuleSetCondition[];
-			/**
-			 * Logical NOT.
-			 */
-			not?: RuleSetCondition[];
-			/**
-			 * Logical OR.
-			 */
-			or?: RuleSetCondition[];
-	  }
 	| ((value: string) => boolean)
+	| RuleSetLogicalConditions
 	| RuleSetCondition[];
+
+/**
+ * Logic operators used in a condition matcher.
+ */
+declare interface RuleSetLogicalConditions {
+	/**
+	 * Logical AND.
+	 */
+	and?: RuleSetCondition[];
+
+	/**
+	 * Logical NOT.
+	 */
+	not?:
+		| string
+		| RegExp
+		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
+		| RuleSetCondition[];
+
+	/**
+	 * Logical OR.
+	 */
+	or?: RuleSetCondition[];
+}
+
+/**
+ * Logic operators used in a condition matcher.
+ */
+declare interface RuleSetLogicalConditionsAbsolute {
+	/**
+	 * Logical AND.
+	 */
+	and?: RuleSetConditionAbsolute[];
+
+	/**
+	 * Logical NOT.
+	 */
+	not?:
+		| string
+		| RegExp
+		| ((value: string) => boolean)
+		| RuleSetLogicalConditionsAbsolute
+		| RuleSetConditionAbsolute[];
+
+	/**
+	 * Logical OR.
+	 */
+	or?: RuleSetConditionAbsolute[];
+}
 
 /**
  * A rule description with conditions and effects for modules.
@@ -8956,21 +9320,8 @@ declare interface RuleSetRule {
 	compiler?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetCondition[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetCondition[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetCondition[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
 		| RuleSetCondition[];
 
 	/**
@@ -8979,21 +9330,8 @@ declare interface RuleSetRule {
 	dependency?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetCondition[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetCondition[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetCondition[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
 		| RuleSetCondition[];
 
 	/**
@@ -9012,21 +9350,8 @@ declare interface RuleSetRule {
 	exclude?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetConditionAbsolute[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditionsAbsolute
 		| RuleSetConditionAbsolute[];
 
 	/**
@@ -9040,21 +9365,8 @@ declare interface RuleSetRule {
 	include?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetConditionAbsolute[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditionsAbsolute
 		| RuleSetConditionAbsolute[];
 
 	/**
@@ -9063,21 +9375,8 @@ declare interface RuleSetRule {
 	issuer?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetConditionAbsolute[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditionsAbsolute
 		| RuleSetConditionAbsolute[];
 
 	/**
@@ -9086,21 +9385,8 @@ declare interface RuleSetRule {
 	issuerLayer?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetCondition[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetCondition[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetCondition[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
 		| RuleSetCondition[];
 
 	/**
@@ -9119,21 +9405,8 @@ declare interface RuleSetRule {
 	mimetype?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetCondition[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetCondition[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetCondition[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
 		| RuleSetCondition[];
 
 	/**
@@ -9157,21 +9430,8 @@ declare interface RuleSetRule {
 	realResource?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetConditionAbsolute[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditionsAbsolute
 		| RuleSetConditionAbsolute[];
 
 	/**
@@ -9185,21 +9445,8 @@ declare interface RuleSetRule {
 	resource?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetConditionAbsolute[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditionsAbsolute
 		| RuleSetConditionAbsolute[];
 
 	/**
@@ -9208,21 +9455,8 @@ declare interface RuleSetRule {
 	resourceFragment?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetCondition[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetCondition[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetCondition[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
 		| RuleSetCondition[];
 
 	/**
@@ -9231,27 +9465,24 @@ declare interface RuleSetRule {
 	resourceQuery?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetCondition[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetCondition[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetCondition[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
 		| RuleSetCondition[];
 
 	/**
 	 * Match and execute these rules when this rule is matched.
 	 */
 	rules?: RuleSetRule[];
+
+	/**
+	 * Match module scheme.
+	 */
+	scheme?:
+		| string
+		| RegExp
+		| ((value: string) => boolean)
+		| RuleSetLogicalConditions
+		| RuleSetCondition[];
 
 	/**
 	 * Flags a module as with or without side effects.
@@ -9264,21 +9495,8 @@ declare interface RuleSetRule {
 	test?:
 		| string
 		| RegExp
-		| {
-				/**
-				 * Logical AND.
-				 */
-				and?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical NOT.
-				 */
-				not?: RuleSetConditionAbsolute[];
-				/**
-				 * Logical OR.
-				 */
-				or?: RuleSetConditionAbsolute[];
-		  }
 		| ((value: string) => boolean)
+		| RuleSetLogicalConditionsAbsolute
 		| RuleSetConditionAbsolute[];
 
 	/**
@@ -9313,9 +9531,7 @@ declare interface RuleSetRule {
 				 */
 				options?: string | { [index: string]: any };
 		  }
-		| ((
-				data: object
-		  ) =>
+		| ((data: object) =>
 				| string
 				| {
 						/**
@@ -9466,6 +9682,7 @@ declare abstract class RuntimeTemplate {
 	expressionFunction(expression?: any, args?: string): string;
 	emptyFunction(): "x => {}" | "function() {}";
 	destructureArray(items?: any, value?: any): string;
+	destructureObject(items?: any, value?: any): string;
 	iife(args?: any, body?: any): string;
 	forEach(variable?: any, array?: any, body?: any): string;
 
@@ -9764,7 +9981,7 @@ declare abstract class RuntimeTemplate {
 		/**
 		 * init fragments will be added here
 		 */
-		initFragments: InitFragment[];
+		initFragments: InitFragment<any>[];
 		/**
 		 * runtime for which this code will be generated
 		 */
@@ -9861,10 +10078,6 @@ declare interface RuntimeValueOptions {
 	buildDependencies?: string[];
 	version?: string | (() => string);
 }
-type Schema =
-	| (JSONSchema4 & Extend)
-	| (JSONSchema6 & Extend)
-	| (JSONSchema7 & Extend);
 declare interface ScopeInfo {
 	definitions: StackedMap<string, ScopeInfo | VariableInfo>;
 	topLevelScope: boolean | "arrow";
@@ -10132,13 +10345,17 @@ declare class Source {
 	source(): string | Buffer;
 	buffer(): Buffer;
 }
-declare interface SourceData {
-	iife?: boolean;
-	init?: string;
-	expression: string;
-}
 declare interface SourceLike {
 	source(): string | Buffer;
+}
+declare interface SourceMap {
+	version: number;
+	sources: string[];
+	mappings: string;
+	file?: string;
+	sourceRoot?: string;
+	sourcesContent?: string[];
+	names?: string[];
 }
 declare class SourceMapDevToolPlugin {
 	constructor(options?: SourceMapDevToolPluginOptions);
@@ -10299,7 +10516,7 @@ declare abstract class StackedMap<K, V> {
 	readonly size: number;
 	createChild(): StackedMap<K, V>;
 }
-type StartupRenderContext = RenderContextObject & { inlined: boolean };
+type StartupRenderContext = RenderContext & { inlined: boolean };
 type Statement =
 	| FunctionDeclaration
 	| VariableDeclaration
@@ -10866,21 +11083,21 @@ declare class Template {
 	static asString(str: string | string[]): string;
 	static getModulesArrayBounds(modules: WithId[]): false | [number, number];
 	static renderChunkModules(
-		renderContext: RenderContextModuleTemplate,
+		renderContext: ChunkRenderContext,
 		modules: Module[],
 		renderModule: (arg0: Module) => Source,
 		prefix?: string
 	): Source;
 	static renderRuntimeModules(
 		runtimeModules: RuntimeModule[],
-		renderContext: RenderContextModuleTemplate & {
+		renderContext: RenderContext & {
 			codeGenerationResults?: CodeGenerationResults;
 			useStrict?: boolean;
 		}
 	): Source;
 	static renderChunkRuntimeModules(
 		runtimeModules: RuntimeModule[],
-		renderContext: RenderContextModuleTemplate
+		renderContext: RenderContext
 	): Source;
 	static NUMBER_OF_IDENTIFIER_START_CHARS: number;
 	static NUMBER_OF_IDENTIFIER_CONTINUATION_CHARS: number;
@@ -10890,6 +11107,16 @@ declare interface TimestampAndHash {
 	timestamp?: number;
 	timestampHash?: string;
 	hash: string;
+}
+
+/**
+ * Use a Trusted Types policy to create urls for chunks.
+ */
+declare interface TrustedTypes {
+	/**
+	 * The name of the Trusted Types policy created by webpack to serve bundle chunks.
+	 */
+	policyName?: string;
 }
 declare const UNDEFINED_MARKER: unique symbol;
 declare interface UpdateHashContextDependency {
@@ -11185,8 +11412,9 @@ declare abstract class Watching {
 	};
 	compiler: Compiler;
 	running: boolean;
-	watcher: any;
-	pausedWatcher: any;
+	watcher?: null | Watcher;
+	pausedWatcher?: null | Watcher;
+	lastWatcherStartTime?: number;
 	watch(
 		files: Iterable<string>,
 		dirs: Iterable<string>,
@@ -11491,9 +11719,7 @@ declare interface WithOptions {
 declare interface WriteOnlySet<T> {
 	add: (T?: any) => void;
 }
-type __TypeWebpackOptions = (
-	data: object
-) =>
+type __TypeWebpackOptions = (data: object) =>
 	| string
 	| {
 			/**
@@ -11516,21 +11742,21 @@ declare function exports(
 	callback?: CallbackWebpack<Stats>
 ): Compiler;
 declare function exports(
-	options: Configuration[] & MultiCompilerOptions,
+	options: ReadonlyArray<Configuration> & MultiCompilerOptions,
 	callback?: CallbackWebpack<MultiStats>
 ): MultiCompiler;
 declare namespace exports {
 	export const webpack: {
 		(options: Configuration, callback?: CallbackWebpack<Stats>): Compiler;
 		(
-			options: Configuration[] & MultiCompilerOptions,
+			options: ReadonlyArray<Configuration> & MultiCompilerOptions,
 			callback?: CallbackWebpack<MultiStats>
 		): MultiCompiler;
 	};
 	export const validate: (options?: any) => void;
 	export const validateSchema: (
-		schema: Schema,
-		options: object | object[],
+		schema: Parameters<typeof validateFunction>[0],
+		options: Parameters<typeof validateFunction>[1],
 		validationConfiguration?: ValidationErrorConfiguration
 	) => void;
 	export const version: string;
@@ -11618,6 +11844,7 @@ declare namespace exports {
 		export let uncaughtErrorHandler: string;
 		export let scriptNonce: string;
 		export let loadScript: string;
+		export let createScriptUrl: string;
 		export let chunkName: string;
 		export let runtimeId: string;
 		export let getChunkScriptFilename: string;
@@ -11656,8 +11883,6 @@ declare namespace exports {
 		Unknown: 3;
 		Used: 4;
 	}>;
-	export const WebpackOptionsValidationError: ValidationError;
-	export const ValidationError: ValidationError;
 	export namespace cache {
 		export { MemoryCachePlugin };
 	}
@@ -11819,19 +12044,19 @@ declare namespace exports {
 			) => 0 | 1 | -1;
 		}
 		export namespace serialization {
-			export let register: (
+			export const register: (
 				Constructor: Constructor,
 				request: string,
 				name: string,
 				serializer: ObjectSerializer
 			) => void;
-			export let registerLoader: (
+			export const registerLoader: (
 				regExp: RegExp,
 				loader: (arg0: string) => boolean
 			) => void;
-			export let registerNotSerializable: (Constructor: Constructor) => void;
-			export let NOT_SERIALIZABLE: object;
-			export let buffersSerializer: Serializer;
+			export const registerNotSerializable: (Constructor: Constructor) => void;
+			export const NOT_SERIALIZABLE: object;
+			export const buffersSerializer: Serializer;
 			export let createFileSerializer: (fs?: any) => Serializer;
 			export { MEASURE_START_OPERATION, MEASURE_END_OPERATION };
 		}
@@ -11916,6 +12141,8 @@ declare namespace exports {
 		WebpackError,
 		WebpackOptionsApply,
 		WebpackOptionsDefaulter,
+		ValidationError as WebpackOptionsValidationError,
+		ValidationError,
 		Entry,
 		EntryNormalized,
 		EntryObject,
@@ -11948,7 +12175,14 @@ declare namespace exports {
 		StatsModuleReason,
 		StatsModuleTraceDependency,
 		StatsModuleTraceItem,
-		StatsProfile
+		StatsProfile,
+		LoaderModule,
+		RawLoaderDefinition,
+		LoaderDefinition,
+		LoaderDefinitionFunction,
+		PitchLoaderDefinitionFunction,
+		RawLoaderDefinitionFunction,
+		LoaderContext
 	};
 }
 

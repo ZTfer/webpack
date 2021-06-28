@@ -4,6 +4,21 @@ const webpack = require("../../../../");
 module.exports = (env, { testPath }) => [
 	{
 		output: {
+			filename: "esm.js",
+			libraryTarget: "module"
+		},
+		target: "node14",
+		resolve: {
+			alias: {
+				external: "./non-external"
+			}
+		},
+		experiments: {
+			outputModule: true
+		}
+	},
+	{
+		output: {
 			filename: "commonjs.js",
 			libraryTarget: "commonjs",
 			iife: false
@@ -48,6 +63,40 @@ module.exports = (env, { testPath }) => [
 			alias: {
 				external: "./non-external"
 			}
+		}
+	},
+	{
+		output: {
+			filename: "amd-runtimeChunk/[name].js",
+			libraryTarget: "amd",
+			globalObject: "global",
+			iife: false
+		},
+		target: "web",
+		resolve: {
+			alias: {
+				external: "./non-external"
+			}
+		},
+		optimization: {
+			runtimeChunk: "single"
+		}
+	},
+	{
+		output: {
+			filename: "amd-iife-runtimeChunk/[name].js",
+			libraryTarget: "amd",
+			globalObject: "global",
+			iife: true
+		},
+		target: "web",
+		resolve: {
+			alias: {
+				external: "./non-external"
+			}
+		},
+		optimization: {
+			runtimeChunk: "single"
 		}
 	},
 	{
